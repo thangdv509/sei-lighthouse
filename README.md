@@ -150,7 +150,7 @@ $ lighthouse mint <collection-address> <group_name>
 Mint multiple nft on a deployed NFT collection.
 
 ```
-$ lighthouse mint <collection-address> <group_name>
+$ lighthouse custom-mint <collection-address> <group_name>
 
 Options:
 
@@ -158,7 +158,7 @@ Options:
 
 -t: Mint timestamp (Automatically mint at that timestamp)
 
-Example: lighthouse mint <collection-address> <group_name> -q 30 -t 1704430692
+Example: lighthouse custom-mint <collection-address> <group_name> -q 30 -t 1704430692
 
 --> Auto mint 30 NFTS of <collection-address> at timestamp 1704430692 (Make sure recipients length is over 30)
 ```
