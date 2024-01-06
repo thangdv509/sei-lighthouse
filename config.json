@@ -3,6 +3,7 @@
   "rpc": "https://sei-rpc.polkachu.com",
   "network": "pacific-1",
   "recipients": [],
+  "privateKeys": [],
   "name": "WeBump",
   "symbol": "BUMP",
   "description": "",

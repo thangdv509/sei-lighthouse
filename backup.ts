@@ -3,10 +3,7 @@ import ora from "ora";
 import inquirer from "inquirer";
 import chalk from "chalk";
 import fs from "fs";
-import {
-  DirectSecp256k1HdWallet,
-  DirectSecp256k1Wallet,
-} from "@cosmjs/proto-signing";
+import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { GasPrice } from "@cosmjs/stargate";
 import { MerkleTree } from "merkletreejs";
@@ -533,7 +530,7 @@ const main = () => {
             "Current timestamp: " + currentTimestamp + " / " + desiredTimestamp
           );
           await sleep(1000);
-          if (currentTimestamp > desiredTimestamp) {
+          if (currentTimestamp > desiredTimestamp + 5) {
             console.log("Lets go mint");
             break;
           }
@@ -541,7 +538,6 @@ const main = () => {
       }
 
       for (let i = 0; i < numMint; ++i) {
-        console.log("Account " + (i + 1) + " " + recipients[i]);
         if (group.merkle_root !== "" && group.merkle_root !== null) {
           //ask for proof
           let proof = await inquirer.prompt([
@@ -605,15 +601,6 @@ const main = () => {
         }
         console.log("Token ID: " + chalk.green(tokenId));
         if (!answers.delay) await sleep(15000);
-
-        if (fs.existsSync("./results.json")) {
-          let data = JSON.parse(fs.readFileSync("./results.json", "utf-8"));
-          data.push({ key: i + 1, owner: recipients[i], tokenId: tokenId });
-          fs.writeFileSync("./results.json", JSON.stringify(data, null, 4));
-        } else {
-          let data = [{ key: i + 1, owner: recipients[i], tokenId: tokenId }];
-          fs.writeFileSync("./results.json", JSON.stringify(data, null, 4));
-        }
       }
     });
 
@@ -1243,60 +1230,44 @@ const main = () => {
     .action(async (collection, tokenId, to, options) => {
       let config = loadConfig();
 
-      const keys = [
-        [
-          "0x3f32b2655e299f6d958fe6707a7e0a98f685d13d6e97b770932db0840ff89151",
-          "2478",
-        ],
-        [
-          "0x7016c06140140f44d165965d590201ec73c1b064b12e612a851c1929845af312",
-          "3162",
-        ],
-      ];
+      const wallet = await DirectSecp256k1HdWallet.fromMnemonic(
+        config.mnemonic,
+        {
+          prefix: "sei",
+        }
+      );
+      const [firstAccount] = await wallet.getAccounts();
 
-      for (let i = 0; i < keys.length; ++i) {
-        console.log(keys[i][0]);
-        const privateKey = Buffer.from(
-          keys[i][0].substring(2, keys[i][0].length),
-          "hex"
-        );
-        const wallet = await DirectSecp256k1Wallet.fromKey(privateKey, "sei");
+      const client = await SigningCosmWasmClient.connectWithSigner(
+        config.rpc,
+        wallet,
+        {
+          gasPrice: GasPrice.fromString(
+            options.gasPrice ? options.gasPrice + "usei" : "0.1usei"
+          ),
+        }
+      );
 
-        // ("sei1zq5rqej68hcww523ndhalsjhyvzajxxkmxrage");
+      let spinner = ora("Transferring NFT").start();
+      const transferMsg = {
+        transfer_nft: {
+          recipient: to,
+          token_id: tokenId,
+        },
+      };
 
-        const [firstAccount] = await wallet.getAccounts();
+      const txReceipt = await client.execute(
+        firstAccount.address,
+        collection,
+        transferMsg,
+        "auto",
+        ""
+      );
 
-        const client = await SigningCosmWasmClient.connectWithSigner(
-          config.rpc,
-          wallet,
-          {
-            gasPrice: GasPrice.fromString(
-              options.gasPrice ? options.gasPrice + "usei" : "0.1usei"
-            ),
-          }
-        );
-
-        let spinner = ora("Transferring NFT").start();
-        const transferMsg = {
-          transfer_nft: {
-            recipient: to,
-            token_id: keys[i][1],
-          },
-        };
-
-        const txReceipt = await client.execute(
-          firstAccount.address,
-          collection,
-          transferMsg,
-          "auto",
-          ""
-        );
-
-        spinner.succeed("NFT minted");
-        console.log(
-          "Transaction hash: " + chalk.green(txReceipt.transactionHash)
-        );
-      }
+      spinner.succeed("NFT minted");
+      console.log(
+        "Transaction hash: " + chalk.green(txReceipt.transactionHash)
+      );
     });
 
   program
