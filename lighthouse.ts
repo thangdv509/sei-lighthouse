@@ -14,6 +14,12 @@ import BigNumber from "bignumber.js";
 import { processCliUpload } from "./arweave";
 import { keccak_256 } from "@noble/hashes/sha3";
 import path from "path";
+import { calculateFee } from "@cosmjs/stargate";
+import {
+  restoreWallet,
+  getSigningCosmWasmClient,
+  getQueryClient,
+} from "@sei-js/core";
 
 const LIGHTHOUSE_CONTRACT_ATLANTIC_2 =
   "sei12gjnfdh2kz06qg6e4y997jfgpat6xpv9dw58gtzn6g75ysy8yt5snzf4ac";
@@ -21,6 +27,11 @@ const LIGHTHOUSE_CONTRACT_PACIFIC_1 =
   "sei1hjsqrfdg2hvwl3gacg4fkznurf36usrv7rkzkyh29wz3guuzeh0snslz7d";
 
 const configFile = "./config.json";
+
+const generateWalletFromMnemonic = async (m: any) => {
+  const wallet = await restoreWallet(m, 0);
+  return wallet;
+};
 
 const getLighthouseContract = (network: string) => {
   if (network === "pacific-1") {
@@ -529,12 +540,8 @@ const main = () => {
         let desiredTimestamp = Number(answers.timestamp);
         while (true) {
           let currentTimestamp = Math.floor(Date.now() / 1000);
-          console.log(
-            "Current timestamp: " + currentTimestamp + " / " + desiredTimestamp
-          );
-          await sleep(1000);
-          if (currentTimestamp > desiredTimestamp) {
-            console.log("Lets go mint");
+          await sleep(100);
+          if (currentTimestamp == desiredTimestamp) {
             break;
           }
         }
@@ -604,7 +611,7 @@ const main = () => {
           }
         }
         console.log("Token ID: " + chalk.green(tokenId));
-        if (!answers.delay) await sleep(15000);
+        if (!answers.delay) await sleep(13000);
 
         if (fs.existsSync("./results.json")) {
           let data = JSON.parse(fs.readFileSync("./results.json", "utf-8"));
@@ -1235,29 +1242,43 @@ const main = () => {
   program
     .command("transfer-nft")
     .description("Transfer NFT")
-    .arguments("<collection> <token_id> <to>")
+    .arguments("<collection> <to>")
     .option(
       "--gas-price <gas_price>",
       "Gas price to use for transaction  (default: 0.1)"
     )
-    .action(async (collection, tokenId, to, options) => {
+    .action(async (collection, to, options) => {
       let config = loadConfig();
+      let mnemonic = config.mnemonic;
 
-      const keys = [
-        [
-          "0x3f32b2655e299f6d958fe6707a7e0a98f685d13d6e97b770932db0840ff89151",
-          "2478",
-        ],
-        [
-          "0x7016c06140140f44d165965d590201ec73c1b064b12e612a851c1929845af312",
-          "3162",
-        ],
-      ];
+      const wallet = await generateWalletFromMnemonic(mnemonic);
+      const accounts = await wallet.getAccounts();
+      let rpc = config.rpc;
 
-      for (let i = 0; i < keys.length; ++i) {
-        console.log(keys[i][0]);
+      const signingCosmWasmClient = await getSigningCosmWasmClient(rpc, wallet);
+      const fee = calculateFee(100000, "0.1usei");
+
+      let recipients = config.recipients;
+      let privateKeys = config.privateKeys;
+
+      let data = JSON.parse(fs.readFileSync("./results.json", "utf-8"));
+
+      for (let i = 0; i < data.length; ++i) {
+        // const response = await signingCosmWasmClient.sendTokens(
+        //   accounts[0].address,
+        //   data[i].owner,
+        //   [{ amount: "2000", denom: "usei" }],
+        //   fee
+        // );
+        // if (i % 100 == 0) console.log(i);
+        // console.log(
+        //   "Send token to " + data[i].owner + " : " + response.transactionHash
+        // );
+
+        let publicKey = data[i].owner;
+        let index = recipients.indexOf(publicKey);
         const privateKey = Buffer.from(
-          keys[i][0].substring(2, keys[i][0].length),
+          privateKeys[index].substring(2, privateKeys[index].length),
           "hex"
         );
         const wallet = await DirectSecp256k1Wallet.fromKey(privateKey, "sei");
@@ -1280,7 +1301,7 @@ const main = () => {
         const transferMsg = {
           transfer_nft: {
             recipient: to,
-            token_id: keys[i][1],
+            token_id: data[i].tokenId,
           },
         };
 
